@@ -109,3 +109,4 @@ mod tests {
         assert!(parse_value("$2\r\nabcde\r\n").is_err());
         assert!(parse_value("$20\r\nabcde\r\n").is_err());
     }
+}

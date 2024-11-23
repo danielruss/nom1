@@ -1,82 +1,54 @@
-use nom::bytes::complete::tag;
-use nom::character::complete::i32;
-use nom::character::complete::space0;
-use nom::sequence::delimited;
-use nom::sequence::pair;
-use nom::sequence::tuple;
-use nom::IResult;
-
-#[derive(Debug)]
-#[allow(dead_code)]
-struct Point3D {
-    x: i32,
-    y: i32,
-    z: i32,
-}
-
-// IResult is is the <input type,output type>
-fn parse_point_0(input: &str) -> IResult<&str, Point3D> {
-    // tag("Point: ") => does input start with "Point: "
-    // if not: error, otherwise
-    // the underscore would store the text "Point: "  which we
-    // are not saving. input now stores the rest of the input text (21, 17, -11)
-    let (input, _) = tag("Point: ")(input)?;
-    // now remove the opening parenthesis ==> 21,17,-11)
-    let (input, _) = tag("(")(input)?;
-    // use the i32 to consume all digits and store the results in the varible x
-    // after this => ,17, -11
-    let (input, x) = i32(input)?;
-    // remove the comma =>17, -11
-    let (input, _) = tag(", ")(input)?;
-    let (input, y) = i32(input)?;
-    let (input, _) = tag(", ")(input)?;
-    let (input, z) = i32(input)?;
-    let (input, _) = tag(")")(input)?;
-
-    Ok((input, Point3D { x, y, z }))
-}
-
-// Lets break down the parse_point_0 to use smaller
-// parsers.
-
-// this take a string slice and returns nothing (an empty tuple)
-// the idea is that we are eating the separator.
-// asserts there is a comma and 0 or more spaces.s
-fn separator(input: &str) -> IResult<&str, ()> {
-    let (input, _) = pair(tag(","), space0)(input)?;
-    Ok((input, ()))
-}
-
-fn parse_coordinates(input: &str) -> IResult<&str, (i32, i32, i32)> {
-    let (input, (x, _, y, _, z)) = tuple((i32, separator, i32, separator, i32))(input)?;
-    Ok((input, (x, y, z)))
-}
-
-fn parse_point_1(input: &str) -> IResult<&str, Point3D> {
-    let (input, (_, (x, y, z), _)) = tuple((tag("Point: ("), parse_coordinates, tag(")")))(input)?;
-    Ok((input, Point3D { x, y, z }))
-}
-
-fn parse_point_2(input: &str) -> IResult<&str, Point3D> {
-    let (input, _) = tag("Point: ")(input)?;
-    let (input, (x, y, z)) = delimited(tag("("), parse_coordinates, tag(")"))(input)?;
-    Ok((input, Point3D { x, y, z }))
-}
+use nom1::{parse_module, ModuleItem};
+use regex::Regex;
+use std::time::Instant;
+pub mod connect_module;
+use connect_module::get_connect_module;
 
 fn main() {
-    let text = r#"
-    [X1]  This is question 1
-    [X2]  This is question 2.
-    "#;
+    let markdown = get_connect_module("module1.txt").expect("Could not load the file");
+    // strip out the comments...
+    let re = Regex::new(r"//.*").unwrap();
+    let markdown = re.replace_all(&markdown, "");
 
-    println!("Hello, world!");
-    println!("{}", text);
-    // Example from video:
-    let s = "Point: (22, 17, -11)";
-    let (_, point) = parse_point_0(s).unwrap();
-    println!("parse_point_0 ==> {:?}", point);
-    let (_, point) = parse_point_1(s).unwrap();
-    println!("parse_point_1 ==> {:?}", point);
-    let (_, point) = parse_point_2(s).unwrap();
-    println!("parse_point_2 ==> {:?}", point);
+    // min,mean,max
+    let mut timings: (u128, f64, u128) = (0, 0., 0);
+    let mut sum: u128 = 0;
+
+    if false {
+        for i in 0..1000 {
+            let now = Instant::now();
+            let _ = parse_module(&markdown).unwrap();
+            let elapsed_time = now.elapsed().as_millis();
+            sum = elapsed_time + sum;
+            if i == 0 {
+                timings = (elapsed_time, sum as f64, elapsed_time);
+            } else {
+                timings = (
+                    elapsed_time.min(timings.0),
+                    (sum as f64) / (i as f64),
+                    elapsed_time.max(timings.2),
+                );
+            }
+        }
+    }
+
+    if true {
+        let (remaining_text, module) = parse_module(&markdown).unwrap();
+        println!("Preamble:\n{:?}", module.preamble.trim());
+        for (indx, mi) in module.items.iter().enumerate() {
+            if indx < 1000 {
+                match mi {
+                    ModuleItem::Question(_q) => {
+                        //println!("{:?}", q.header)
+                    }
+                    ModuleItem::Loop(l) => println!("====> LOOP:\n{:?}", l),
+                    ModuleItem::Grid(g) => println!("{:?}", g),
+                }
+                //println!("{}: {:?}", indx + 1, mi)
+            }
+        }
+        println!("anything additional???:\n{}", remaining_text);
+    }
+
+    println!("Time to parse: {:?}", timings);
 }
