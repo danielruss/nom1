@@ -9,8 +9,6 @@ use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
 
-pub mod connect_module;
-
 #[derive(Debug)]
 pub struct Module {
     pub preamble: String,

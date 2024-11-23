@@ -1,8 +1,19 @@
 use nom1::{parse_module, ModuleItem};
 use regex::Regex;
 use std::time::Instant;
-pub mod connect_module;
-use connect_module::get_connect_module;
+
+use std::io::Read;
+
+pub fn get_connect_module(name: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut res = reqwest::blocking::get(format!(
+        "https://raw.githubusercontent.com/episphere/questionnaire/refs/heads/main/prod/{}",
+        name
+    ))?;
+    let mut body = String::new();
+    res.read_to_string(&mut body)?;
+
+    Ok(body)
+}
 
 fn main() {
     let markdown = get_connect_module("module1.txt").expect("Could not load the file");
