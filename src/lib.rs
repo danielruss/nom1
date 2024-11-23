@@ -9,8 +9,6 @@ use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
 
-
-
 #[derive(Debug)]
 pub struct Module {
     pub preamble: String,
@@ -54,12 +52,14 @@ impl Grid {
 pub struct Loop {
     tag: Tag,
     markdown: String,
+    questions: Vec<ModuleItem>,
 }
 impl Loop {
-    fn new(tag: Tag, markdown: &str) -> Self {
+    fn new(tag: Tag, markdown: &str, questions: Vec<ModuleItem>) -> Self {
         Loop {
             tag,
             markdown: String::from(markdown.trim()),
+            questions,
         }
     }
 }
@@ -75,8 +75,8 @@ impl ModuleItem {
     fn new_question(header: &str, markdown: &str) -> Self {
         ModuleItem::Question(Question::new(header, markdown))
     }
-    fn new_loop(tag: Tag, markdown: &str) -> Self {
-        ModuleItem::Loop(Loop::new(tag, markdown))
+    fn new_loop(tag: Tag, markdown: &str, items: Vec<ModuleItem>) -> Self {
+        ModuleItem::Loop(Loop::new(tag, markdown, items))
     }
     fn new_grid(tag: Tag, markdown: &str) -> Self {
         ModuleItem::Grid(Grid::new(tag, markdown))
@@ -150,9 +150,12 @@ fn parse_tag(input: &str) -> IResult<&str, Tag> {
     Ok((input, tag))
 }
 
-fn parse_loop(input: &str) -> IResult<&str, &str> {
+fn parse_loop(input: &str) -> IResult<&str, (&str, Vec<ModuleItem>)> {
     let (input, markdown) = terminated(take_until("</loop>"), tag("</loop>"))(input)?;
-    return Ok((input, markdown));
+    let loop_input = markdown;
+    let (_, items) = many0(parse_question_loop_grid)(loop_input)?;
+
+    return Ok((input, (markdown, items)));
 }
 
 fn parse_grid(input: &str) -> IResult<&str, &str> {
@@ -174,8 +177,8 @@ fn parse_loop_grid(input: &str) -> IResult<&str, ModuleItem> {
             Ok((input, ModuleItem::new_grid(tag, markdown)))
         }
         "loop" => {
-            let (input, markdown) = parse_loop(input)?;
-            Ok((input, ModuleItem::new_loop(tag, markdown)))
+            let (input, (markdown, questions)) = parse_loop(input)?;
+            Ok((input, ModuleItem::new_loop(tag, markdown, questions)))
         }
         _ => unreachable!(),
     }
@@ -266,7 +269,14 @@ mod tests {
             parse_loop_grid("<loop>[Q1]lala\n[Q2]lili</loop>"),
             Ok((
                 "",
-                ModuleItem::new_loop(Tag::new("loop", ""), "[Q1]lala\n[Q2]lili")
+                ModuleItem::new_loop(
+                    Tag::new("loop", ""),
+                    "[Q1]lala\n[Q2]lili",
+                    vec![
+                        ModuleItem::new_question("Q1", "[Q1]lala\n"),
+                        ModuleItem::new_question("Q2", "lili")
+                    ]
+                )
             ))
         );
     }
@@ -288,14 +298,26 @@ mod tests {
         assert_eq!(parse_question_loop_grid(markdown), Ok(("[Q2] end!!", mi)));
 
         let markdown = "<loop>\n[A1]this is a test [Q2] end!!</loop>";
-        let mi = ModuleItem::new_loop(Tag::new("loop", ""), "[A1]this is a test [Q2] end!!");
+        let mi = ModuleItem::new_loop(
+            Tag::new("loop", ""),
+            "[A1]this is a test [Q2] end!!",
+            vec![
+                ModuleItem::new_question("A1", "this is a test"),
+                ModuleItem::new_question("Q2", "end!!"),
+            ],
+        );
         assert_eq!(parse_question_loop_grid(markdown), Ok(("", mi)));
 
         let markdown = "<loop id=\"loopid\">\n[A1]this is a test [Q2] end!!</loop>";
         let mi = ModuleItem::new_loop(
             Tag::new("loop", r#"id="loopid""#),
             "[A1]this is a test [Q2] end!!",
+            vec![
+                ModuleItem::new_question("A1", "this is a test"),
+                ModuleItem::new_question("Q2", "end!!"),
+            ],
         );
+        println!("{:?}", parse_question_loop_grid(markdown));
         assert_eq!(parse_question_loop_grid(markdown), Ok(("", mi)));
 
         let markdown = "<grid>\n[A1]this is a test [Q2] end!!\n</grid>";
